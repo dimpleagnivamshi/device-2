@@ -39,13 +39,14 @@ function loadConfig() {
 
     const secret = (process.env.FEED_CONTROL_SECRET || "default_secure_secret_12345").trim();
 
-    let frontendOrigin = "https://sensor-dashboard.getvoroa.com";
+ let frontendOrigin = process.env.FRONTEND_ORIGIN || "";
     if (process.env.FRONTEND_ORIGIN) {
         try {
             const frontend = new URL(process.env.FRONTEND_ORIGIN);
             frontendOrigin = frontend.origin;
         } catch {}
     }
+    
 
     // Defaulting to 3001 so it doesn't conflict with Device 1 locally
     const rawPort = process.env.PORT || "3001";
