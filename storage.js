@@ -21,40 +21,40 @@ let isTruncating = false;
 
 async function initializeStorage() {
     try {
-        const maxIdRes = await pool.query("SELECT id FROM telemetry_active_stream ORDER BY id DESC LIMIT 1");
+        const maxIdRes = await pool.query("SELECT id FROM device2_telemetry_active_stream ORDER BY id DESC LIMIT 1");
         if (maxIdRes.rows.length > 0) {
             const maxId = maxIdRes.rows[0].id;
             for (let i = 1; i <= 3; i++) {
-                const check = await pool.query(`SELECT id FROM telemetry_data_${i} WHERE id = $1`, [maxId]);
+                const check = await pool.query(`SELECT id FROM device2_telemetry_${i} WHERE id = $1`, [maxId]);
                 if (check.rows.length > 0) {
-                    const countRes = await pool.query(`SELECT COUNT(*)::int as c FROM telemetry_data_${i}`);
+                    const countRes = await pool.query(`SELECT COUNT(*)::int as c FROM device2_telemetry_${i}`);
                     currentSheet = i;
                     rowCount = countRes.rows[0].c;
-                    console.log(`Resuming on Sheet ${i} with ${rowCount} rows.`);
+                    console.log(`Resuming Device 2 on Sheet ${i} with ${rowCount} rows.`);
                     return;
                 }
             }
         }
     } catch (e) {
-        console.log("Database initialized on fresh rotation loop.");
+        console.log("Database initialized on fresh rotation loop for Device 2.");
     }
 }
 
 async function getFeedState() {
-    const result = await pool.query("SELECT running, last_values FROM feed_state WHERE singleton = TRUE");
+    const result = await pool.query("SELECT running, last_values FROM feed_state WHERE device_id = 'device-2'");
     return result.rows[0] || { running: false, last_values: {} };
 }
 
 async function setFeedState(running, lastValues) {
-    const sql = "INSERT INTO feed_state (singleton, running, last_values, updated_at) VALUES (TRUE, $1, $2::jsonb, NOW()) " +
-        "ON CONFLICT (singleton) DO UPDATE SET running = EXCLUDED.running, last_values = EXCLUDED.last_values, updated_at = NOW() " +
+    const sql = "INSERT INTO feed_state (device_id, running, last_values, updated_at) VALUES ('device-2', $1, $2::jsonb, NOW()) " +
+        "ON CONFLICT (device_id) DO UPDATE SET running = EXCLUDED.running, last_values = EXCLUDED.last_values, updated_at = NOW() " +
         "RETURNING running, last_values";
     const result = await pool.query(sql, [running, JSON.stringify(lastValues || {})]);
     return result.rows[0];
 }
 
 async function getLatestReading() {
-    const result = await pool.query("SELECT id, payload FROM telemetry_active_stream ORDER BY id DESC LIMIT 1");
+    const result = await pool.query("SELECT id, payload FROM device2_telemetry_active_stream ORDER BY id DESC LIMIT 1");
     if (!result.rows.length) return null;
     return { id: Number(result.rows[0].id), ...result.rows[0].payload };
 }
@@ -65,18 +65,18 @@ async function saveReading(row) {
     if (rowCount > ROW_LIMIT) {
         currentSheet = currentSheet === 3 ? 1 : currentSheet + 1;
         rowCount = 1; 
-        console.log(`Rolled over to telemetry_data_${currentSheet}`);
+        console.log(`Rolled over to device2_telemetry_${currentSheet}`);
     }
 
     if (rowCount === WIPE_THRESHOLD && !isTruncating) {
         isTruncating = true;
         const sheetToWipe = currentSheet === 3 ? 1 : currentSheet + 1;
-        pool.query(`TRUNCATE TABLE telemetry_data_${sheetToWipe}`)
+        pool.query(`TRUNCATE TABLE device2_telemetry_${sheetToWipe}`)
             .then(() => { isTruncating = false; })
             .catch(err => { console.error("Truncate failed:", err); isTruncating = false; });
     }
 
-    const query = `INSERT INTO telemetry_data_${currentSheet} (payload) VALUES ($1::jsonb) RETURNING id`;
+    const query = `INSERT INTO device2_telemetry_${currentSheet} (payload) VALUES ($1::jsonb) RETURNING id`;
     const result = await pool.query(query, [JSON.stringify(row)]);
     
     return { id: Number(result.rows[0].id), ...row };
@@ -86,17 +86,17 @@ async function listReadings(options) {
     const limit = Math.max(1, Math.min(Number(options.limit) || 1000, 5000));
     let result;
     if (options.afterId != null) {
-        result = await pool.query("SELECT id, payload FROM telemetry_active_stream WHERE id > $1 ORDER BY id ASC LIMIT $2", [options.afterId, limit]);
+        result = await pool.query("SELECT id, payload FROM device2_telemetry_active_stream WHERE id > $1 ORDER BY id ASC LIMIT $2", [options.afterId, limit]);
     } else if (options.beforeId != null) {
-        result = await pool.query("SELECT id, payload FROM telemetry_active_stream WHERE id < $1 ORDER BY id DESC LIMIT $2", [options.beforeId, limit]);
+        result = await pool.query("SELECT id, payload FROM device2_telemetry_active_stream WHERE id < $1 ORDER BY id DESC LIMIT $2", [options.beforeId, limit]);
     } else {
-        result = await pool.query("SELECT id, payload FROM telemetry_active_stream ORDER BY id DESC LIMIT $1", [limit]);
+        result = await pool.query("SELECT id, payload FROM device2_telemetry_active_stream ORDER BY id DESC LIMIT $1", [limit]);
     }
     return result.rows.map(r => ({ id: Number(r.id), ...r.payload })).sort((a, b) => a.id - b.id);
 }
 
 async function getReadingCount() {
-    const result = await pool.query("SELECT COUNT(*)::bigint AS count FROM telemetry_active_stream");
+    const result = await pool.query("SELECT COUNT(*)::bigint AS count FROM device2_telemetry_active_stream");
     return Number(result.rows[0].count);
 }
 
