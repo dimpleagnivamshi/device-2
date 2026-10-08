@@ -8,7 +8,7 @@ const DEFAULTS = {
 };
 
 // This pulls the live Voroa URL from the environment variables
-const DEVICE_1_URL = process.env.DEVICE_1_URL || "http://localhost:3000";
+const DEVICE_1_URL = process.env.DEVICE_1_URL || "https://device-1.getvoroa.com";
 
 function initialValues() {
     return Object.fromEntries(Object.entries(DEFAULTS).map(([key, cfg]) => [key, cfg.start]));
